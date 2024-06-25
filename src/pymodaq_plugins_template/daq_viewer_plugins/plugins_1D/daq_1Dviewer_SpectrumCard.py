@@ -9,6 +9,7 @@ from pymodaq.utils.parameter import Parameter
 #import spcm
 #from spcm import units # spcm uses the pint library for unit handling (units is a UnitRegistry object)
 import PyQt5.QtCore as Qtc
+import PyQt5.QtWidgets as Qtw
 import sys
 import spcm
 from spcm import units
@@ -59,7 +60,7 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
              'name': 'channels',
              'type': 'itemselect',
              'value': dict(all_items=[
-                 "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7"], selected=["C0"])},
+                 "1 channel", "2 channels", "4 channels", "8 channels"], selected=["1 channel"])},
             
             {'title': 'Clock mode:',
              'name': 'clockMode',
@@ -67,16 +68,27 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
              'value': dict(all_items=[
                  "internal PLL", "external", "external reference" ], selected=["internal PLL"])},
             
-            {'title': 'Trigger type:',
+            {'title': 'Trigger:',
              'name': 'triggerType',
              'type': 'itemselect',
              'value': dict(all_items=[
-                 "None", "Rising edge", "Falling edge"], selected=["None"])},
+                 "None", "Software trigger", "External analog trigger"], selected=["None"])},
+            
+            {'title': 'Trigger mode',
+             'name': 'triggerMode',
+             'type': 'itemselect',
+             'value': dict(all_items=[
+                 "Rising edge", "Falling edge", "Both"], selected=["Rising edge"])},
+            
+            {'title': 'Trigger level (mV):',
+             'name': 'trigLevel',
+             'type': 'float',
+             'value': 0, 'default': 0},
             
             {'title': 'Sample rate (MHz):',
              'name': 'sampleRate',
              'type': 'float',
-             'value': 20, 'default': 20},
+             'value': 30, 'default': 30},
             
             {'title': 'Amplitude (mV):',
              'name': 'Amp',
@@ -91,12 +103,12 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
             {'title': 'Time range (µs):',
              'name': 'Range',
              'type': 'float',
-             'value': 200, 'default': 200},
+             'value': 10, 'default': 10},
             
             {'title': 'Post trigger duration (µs):',
              'name': 'postTrigDur',
              'type': 'float',
-             'value': 80, 'default': 80},
+             'value': 0, 'default': 0},
             
             
         ]
@@ -115,6 +127,10 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
         self.card = None
         
         self.manager = None
+        
+        self.hit_except = None
+        
+        self.trigger = None
 
     def commit_settings(self, param: Parameter):
         """Apply the consequences of a change of value in the detector settings
@@ -131,6 +147,21 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
             channel_nbr = int(channel[1])
       
             self.controller.setChannel(channel_nbr, self.settings.child('Amp').value(), self.settings.child('Offset').value())
+            
+        if param.name() == "sampleRate":
+            clock = spcm.Clock(self.card)
+            clock.mode(spcm.SPC_CM_INTPLL)            # clock mode internal PLL
+            clock.sample_rate(self.settings.child('sampleRate').value() * units.MHz, return_unit=units.MHz)
+            
+        if param.name() == "Offset":
+            self.channels[0].offset(self.settings.child('Offset').value() * units.mV, return_unit=units.mV)
+            
+        if param.name() == "Amp":
+            self.channels.amp(self.settings.child('Amp').value() * units.mV)
+
+        if param.name() == "trigLevel":
+            self.trigger.ch_level0(self.channels[0], param.value() * units.mV, return_unit=units.mV)         
+        
 #        elif ...
         ##
 
@@ -151,13 +182,13 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
         initialized: bool
             False if initialization failed otherwise True
         """
-
+       
         
         self.manager = (spcm.Card('/dev/spcm0'))
         enter = type(self.manager).__enter__
         exit = type(self.manager).__exit__
         value = enter(self.manager)
-        hit_except = False
+        self.hit_except = False
 
         try:
             self.card = value 
@@ -184,26 +215,36 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
             self.card.card_mode(spcm.SPC_REC_STD_SINGLE)     # single trigger standard mode
             self.card.timeout(5 * units.s)                     # timeout 5 s
             
-            trigger = spcm.Trigger(self.card)
-            trigger.or_mask(spcm.SPC_TMASK_NONE)       # trigger set to none #software
-            trigger.and_mask(spcm.SPC_TMASK_NONE)      # no AND mask
+            self.trigger = spcm.Trigger(self.card)
+            
+            if self.settings.child('triggerType').value()['selected'] == ['None']:
+                self.trigger.or_mask(spcm.SPC_TMASK_NONE)       # trigger set to none 
+            if self.settings.child('triggerType').value()['selected'] == ['Software trigger']:
+                print('bla')
+                self.trigger.or_mask(spcm.SPC_TMASK_SOFTWARE)       # trigger set to software          
+            if self.settings.child('triggerType').value()['selected'] == ['External analog trigger']:
+                self.trigger.or_mask(spcm.SPC_TMASK_EXT0)       # trigger set to external analog                    
+            
+            
+            
+            self.trigger.and_mask(spcm.SPC_TMASK_NONE)      # no AND mask
             
             clock = spcm.Clock(self.card)
             clock.mode(spcm.SPC_CM_INTPLL)            # clock mode internal PLL
             clock.sample_rate(self.settings.child('sampleRate').value() * units.MHz, return_unit=units.MHz)
             
             # setup the channels
-            '''
-            channel = self.settings.child('channels').value()
+ 
+            if self.settings.child('channels').value()['selected'] == ['1 channel']:
+                self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0)
+            if self.settings.child('channels').value()['selected'] == ['2 channels']:
+                self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0 | spcm.CHANNEL1)
+            if self.settings.child('channels').value()['selected'] == ['4 channels']:
+                self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0 | spcm.CHANNEL1 | spcm.CHANNEL2 | spcm.CHANNEL3)
+            if self.settings.child('channels').value()['selected'] == ['8 channels']:
+                self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0 | spcm.CHANNEL1 | spcm.CHANNEL2 | spcm.CHANNEL3 | spcm.CHANNEL4 | spcm.CHANNEL5 | spcm.CHANNEL6 | spcm.CHANNEL7)
             
-            channel_nbr = int(channel[1])
-            if channel_nbr == 0:
-                self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0) # enable channel 0
-            if channel_nbr == 1:
-                self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL1) # enable channel 1
-                
-            ''' 
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0)#|spcm.CHANNEL1) # enable channel 0
+            #self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0 | spcm.CHANNEL1| spcm.CHANNEL2| spcm.CHANNEL3)#|spcm.CHANNEL1) # enable channel 0
             self.channels.amp(self.settings.child('Amp').value() * units.mV)
             self.channels[0].offset(self.settings.child('Offset').value() * units.mV, return_unit=units.mV)
             
@@ -214,9 +255,19 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
             #channels.coupling(spcm.COUPLING_DC)
             
             # Channel triggering
-            trigger.ch_or_mask0(self.channels[0].ch_mask())
-            trigger.ch_mode(self.channels[0], spcm.SPC_TM_POS)
-            trigger.ch_level0(self.channels[0], 0 * units.mV, return_unit=units.mV)
+            self.trigger.ch_or_mask0(self.channels[0].ch_mask())
+            
+            
+            if self.settings.child('triggerMode').value()['selected'] == ['Rising edge']:
+                self.trigger.ch_mode(self.channels[0], spcm.SPC_TM_POS)
+            if self.settings.child('triggerMode').value()['selected'] == ['Falling edge']:
+                self.trigger.ch_mode(self.channels[0], spcm.SPC_TM_NEG)                
+            if self.settings.child('triggerMode').value()['selected'] == ['Both']:
+                self.trigger.ch_mode(self.channels[0], spcm.SPC_TM_BOTH)            
+                
+                
+                
+            self.trigger.ch_level0(self.channels[0], self.settings.child('trigLevel').value() * units.mV, return_unit=units.mV)
             
 
             
@@ -226,7 +277,7 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
             #self.card.start(spcm.M2CMD_CARD_ENABLETRIGGER, spcm.M2CMD_DATA_WAITDMA)
         
         except:
-            hit_except = True
+            self.hit_except = True
             if not exit(self.manager, *sys.exc_info()):
                 raise
 
@@ -242,9 +293,9 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
         Qtc.QThread.msleep(1000)
         #QtCore.QThread.msleep(500)
         # initialize viewers with the future type of data
-        self.dte_signal_temp.emit(DataToExport('Card', data=[DataFromPlugins(name='Trace1', data=[np.zeros((100)), np.zeros((100))],
+        self.dte_signal_temp.emit(DataToExport('Card', data=[DataFromPlugins(name='Trace1', data=[np.zeros((100))],
                                                                              dim='Data1D',
-                                                                             labels=['C1', 'C2'])]))
+                                                                             labels=[])]))
         self.emit_status(ThreadCommand('close_splash'))
                 
 
@@ -256,8 +307,9 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
         """Terminate the communication protocol"""
         ## TODO for your custom plugin
         #raise NotImplemented  # when writing your own plugin remove this line
-        self.controller.terminate_the_communication(self.manager)  # when writing your own plugin replace this line
-
+        self.controller.terminate_the_communication(self.manager, self.hit_except)  # when writing your own plugin replace this line
+        
+        
     def grab_data(self, Naverage=1, **kwargs):
         #self.emit_status(ThreadCommand('show_splash', 'Bla ...'))
         #Qtc.QThread.msleep(1000)
@@ -287,7 +339,7 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
         self.x_axis = Axis('Time', units='µs', data=data_x, index=0)
         self.dte_signal.emit(DataToExport('SpectrumCard',
                                           data=[DataFromPlugins(name='trace', data=data_tot,
-                                                                dim='Data1D', labels=['C0', 'C1'], axes=[self.x_axis]
+                                                                dim='Data1D', labels=[], axes=[self.x_axis]
                                                                 )]))
         
 
@@ -306,7 +358,7 @@ class DAQ_1DViewer_SpectrumCard(DAQ_Viewer_base):
     def stop(self):
         """Stop the current grab hardware wise if necessary"""
         ## TODO for your custom plugin
-        raise NotImplemented  # when writing your own plugin remove this line
+        #raise NotImplemented  # when writing your own plugin remove this line
         self.controller.your_method_to_stop_acquisition()  # when writing your own plugin replace this line
         self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
         ##############################
