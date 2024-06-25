@@ -15,35 +15,7 @@ import sys
 class Digitizer_Wrapper:
     
 
-    card = None    
 
-        
-    def setChannel(self, channel_nbr, Amp, Offset):
-        if channel_nbr == 0:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL0) # enable channel 0
-        if channel_nbr == 1:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL1)             
-        if channel_nbr == 2:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL2)            
-        if channel_nbr == 3:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL3)           
-        if channel_nbr == 4:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL4)        
-        if channel_nbr == 5:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL5)             
-        if channel_nbr == 6:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL6)            
-        if channel_nbr == 7:
-            self.channels = spcm.Channels(self.card, card_enable=spcm.CHANNEL7)           
-
-            
-        self.channels.amp(Amp * units.mV)
-        self.channels[0].offset(Offset * units.mV, return_unit=units.mV)
-        self.channels.termination(1)       
-        
-        
- 
-        
 ############## PMD mandatory methods       
         
     def get_the_x_axis(self):
@@ -75,7 +47,7 @@ class Digitizer_Wrapper:
     #def get_data_from_buffer():
         
       
-    def terminate_the_communication(self, manager):
+    def terminate_the_communication(self, manager, hit_except):
         try:
             print('Communication terminated')
 
@@ -85,5 +57,7 @@ class Digitizer_Wrapper:
                 raise
         finally:
             if not hit_except:
-                exit(manager, None, None, None)
+                
+                exit(manager)
+                manager.close()
   
