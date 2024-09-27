@@ -25,20 +25,18 @@ Use this template to create a repository on your account and start the developme
 Authors
 =======
 
-* First Author  (myemail@xxx.org)
-* Other author (myotheremail@xxx.org)
+* Martin Luttmann  (martin.luttmann@epfl.ch)
 
-.. if needed use this field
+
+
 
     Contributors
     ============
 
-    * First Contributor
+    * Malo Hervé
     * Other Contributors
 
-.. if needed use this field
 
-  Depending on the plugin type, delete/complete the fields below
 
 
 Instruments
@@ -46,34 +44,16 @@ Instruments
 
 Below is the list of instruments included in this plugin
 
-Actuators
-+++++++++
 
-* **yyy**: control of yyy actuators
-* **xxx**: control of xxx actuators
 
-Viewer0D
-++++++++
-
-* **yyy**: control of yyy 0D detector
-* **xxx**: control of xxx 0D detector
 
 Viewer1D
 ++++++++
 
-* **yyy**: control of yyy 1D detector
-* **xxx**: control of xxx 1D detector
+* **SpectrumCard**: control of a 1D Spectrum PCI card, tested with the M2p.5933-x4 device.
 
 
-Viewer2D
-++++++++
 
-* **yyy**: control of yyy 2D detector
-* **xxx**: control of xxx 2D detector
-
-
-PID Models
-==========
 
 
 Extensions
