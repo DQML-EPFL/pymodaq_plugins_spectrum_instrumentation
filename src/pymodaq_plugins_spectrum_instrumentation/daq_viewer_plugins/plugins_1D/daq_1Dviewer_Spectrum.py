@@ -58,8 +58,9 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
             ]},
 
         {'title': 'External reference clock parameters', 'name': 'clock_param', 'type': 'group', 'children': [
-            {'title': 'Clock mode:', 'name': 'clockMode', 'type':'list', 'limits': ["internal PLL", "external", "external reference"], "value":"internal PLL" },
-            {'title': 'External ref. clock rate:', 'name': 'ExtClock', 'type': 'int', 'value': 80, 'default': 80, 'suffix':'MHz'},
+            {'title': 'Clock mode:', 'name': 'clockMode', 'type':'list', 'limits': ["internal PLL", "external", "external reference"], "value":"external reference" },
+            # {'title': 'Clock mode:', 'name': 'clockMode', 'type':'list', 'limits': ["internal PLL", "external", "external reference"], "value":"internal PLL" },
+            {'title': 'External ref. clock rate:', 'name': 'ExtClock', 'type': 'float', 'value': 80.01, 'default': 80.01, 'suffix':'MHz'},
             {'title': 'Clock threshold', 'name': 'clock_th', 'type': 'float', 'value': 1.5, 'default': 1.5, 'suffix':'V'},
             ], 'expanded': False},
 
@@ -190,9 +191,8 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
             self.emit_status(ThreadCommand('Update_Status', ['Error in card Aquisition ']))
             self.hit_except = True
 
-        self.x_axis = Axis(data=self.controller.get_the_x_axis(), label='Time', units="s", index=0)
 
-        dwa = DataFromPlugins(name='Trace', data=data_tot, dim='Data1D', axes=[self.x_axis])
+        dwa = DataFromPlugins(name='Pulse train', data=data_tot, dim='Data1D', labels=['D', 'I'], do_plot=True, do_save=True)
 
         data_to_export = [dwa]
 

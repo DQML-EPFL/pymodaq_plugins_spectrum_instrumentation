@@ -163,8 +163,8 @@ class DAQ_1DViewer_Spectrum_Lockin(DAQ_1DViewer_Spectrum):
 
         if self.settings.child('lock_in', 'BG_sub').value() == True:
             cutoff = int(self.points_per_step * self.settings.child("lock_in", "BG_prop").value()/100)
-            diff_data_int = np.sum( diff_chan_reshaped[:,:cutoff], axis=1 ) * (1-self.settings.child('lock_in', 'BG_sub').value()/100) - np.sum(diff_chan_reshaped[:,cutoff:], axis=1) * self.settings.child('lock_in', 'BG_sub').value()/100
-            sum_data_int = np.sum( sum_chan_reshaped[:,:cutoff], axis=1 ) * (1-self.settings.child('lock_in', 'BG_sub').value()/100) - np.sum(sum_chan_reshaped[:,cutoff:], axis=1) * self.settings.child('lock_in', 'BG_sub').value()/100
+            diff_data_int = np.sum( diff_chan_reshaped[:,:cutoff], axis=1 ) * (1-self.settings.child('lock_in', 'BG_prop').value()/100) - np.sum(diff_chan_reshaped[:,cutoff:], axis=1) * self.settings.child('lock_in', 'BG_prop').value()/100
+            sum_data_int = np.sum( sum_chan_reshaped[:,:cutoff], axis=1 ) * (1-self.settings.child('lock_in', 'BG_prop').value()/100) - np.sum(sum_chan_reshaped[:,cutoff:], axis=1) * self.settings.child('lock_in', 'BG_prop').value()/100
         else:
             diff_data_int = np.sum(diff_chan_reshaped, axis=1)
             sum_data_int = np.sum(sum_chan_reshaped, axis=1)

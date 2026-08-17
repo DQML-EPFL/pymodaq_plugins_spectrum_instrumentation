@@ -57,12 +57,6 @@ class Spectrum_Wrapper_Single:
         
         # --- Determine Some Properties
         Num_Samples = int( (self.duration*1e-3) * (self.sample_rate*1e6) )                 # Total Number of Samples
-        print("\n========== Initializing SPCM Card ========== " )
-        print(" ----- Mode : Single")
-        print("Duration = ", self.duration, "ms")
-        print("Number of Samples = ", Num_Samples)
-        print("Sampling Frequency = ", self.sample_rate, "MHz")
-        print(  "============================================" )
 
         try:
 
@@ -147,6 +141,7 @@ class Spectrum_Wrapper_Single:
                 case _: print("ERROR : unknown trigger type")
 
 
+
             initialized = True
 
         except Exception as e:
@@ -161,7 +156,17 @@ class Spectrum_Wrapper_Single:
             hit_except = True
             initialized = False
 
- 
+
+        # Communicate Properties
+        print(f"Desired clock = {clock_frequency}")
+        print("\n========== Initializing SPCM Card ========== " )
+        print(" ----- Mode : Single")
+        print("Duration = ", self.duration, "ms")
+        print("Number of Samples per Pulse = ", Num_Samples)
+        print("Sampling Frequency = ", self.sample_rate, "MHz")
+        print(f"Clock Frequency = {clock.reference_clock()*1e-6:.3f} MHz")
+        print(  "============================================" )
+
 
         return initialized
 
@@ -222,13 +227,13 @@ class Spectrum_Wrapper_Single:
 
 def main():
 
-    controller = Spectrum_Wrapper_Single(duration=     10, 
+    controller = Spectrum_Wrapper_Single(duration=     1000, 
                                         sample_rate=   0.2)
 
     initialized = controller.initialise_device(clock_mode=             ["internal PLL", "external", "external reference"][0],
-                                                    clock_frequency=        80,
-                                                    channels_to_activate=   [0,1,1,1],
-                                                    # channels_to_activate=   [0,0,1,0,1,0,0,0],
+                                                    clock_frequency=        80.00,
+                                                    # channels_to_activate=   [1,1,1,1],
+                                                    channels_to_activate=   [0,0,1,0,1,0,0,0],
                                                     channel_amplitude=      5000,
                                                     trigger_settings=       {"trigger_type":        [ "None", "Channel trigger", "Software trigger", "External analog trigger" ][0],
                                                                                 "trigger_channel":  ["CH0", "CH1", "CH2", "CH3", "CH4", "CH5", "CH6", "CH7"][0],
@@ -237,6 +242,36 @@ def main():
                                                     )
 
     controller.get_device_info(True)
+
+
+    # # Single Aquisition
+    # import matplotlib.pyplot as plt
+    # data = controller.grab_trace()
+    # for i, data_ in enumerate(data):
+    #     plt.plot(controller.get_the_x_axis(), data_, label=f"Channel {i}")
+    # plt.xlabel("Time [s]"); plt.ylabel("Signal [a.u.]")
+    # plt.show()
+
+
+    # # Live mode
+    # import time
+    # import matplotlib.pyplot as plt
+
+    # plt.ion()
+    # fig, ax = plt.subplots()
+
+    # while True:
+    #     y = controller.grab_trace()[1]
+    #     x = controller.get_the_x_axis()
+    #     ax.clear()
+    #     ax.plot(x, y)
+    #     plt.xlabel("Time [s]"); plt.ylabel("Signal [a.u.]")
+    #     fig.canvas.draw()
+    #     fig.canvas.flush_events()
+    #     time.sleep(0.1)
+
+
+
 
 
 if __name__=="__main__":
