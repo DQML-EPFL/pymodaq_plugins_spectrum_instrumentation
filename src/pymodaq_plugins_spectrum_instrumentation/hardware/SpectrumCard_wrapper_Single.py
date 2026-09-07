@@ -5,6 +5,9 @@ Created on Tue Jun  4 11:46:01 2024
 @author: dqml-lab
 """
 
+
+# TODO: 
+
 import spcm
 from spcm import units  # spcm uses the pint library for unit handling (units is a UnitRegistry object)
 import sys
@@ -141,7 +144,6 @@ class Spectrum_Wrapper_Single:
                 case _: print("ERROR : unknown trigger type")
 
 
-
             initialized = True
 
         except Exception as e:
@@ -158,12 +160,11 @@ class Spectrum_Wrapper_Single:
 
 
         # Communicate Properties
-        print(f"Desired clock = {clock_frequency}")
         print("\n========== Initializing SPCM Card ========== " )
         print(" ----- Mode : Single")
         print("Duration = ", self.duration, "ms")
-        print("Number of Samples per Pulse = ", Num_Samples)
         print("Sampling Frequency = ", self.sample_rate, "MHz")
+        print("Total Number of Samples = ", Num_Samples)
         print(f"Clock Frequency = {clock.reference_clock()*1e-6:.3f} MHz")
         print(  "============================================" )
 
@@ -227,15 +228,15 @@ class Spectrum_Wrapper_Single:
 
 def main():
 
-    controller = Spectrum_Wrapper_Single(duration=     1000, 
-                                        sample_rate=   0.2)
+    controller = Spectrum_Wrapper_Single(duration=     5, 
+                                        sample_rate=   1)
 
-    initialized = controller.initialise_device(clock_mode=             ["internal PLL", "external", "external reference"][0],
-                                                    clock_frequency=        80.00,
+    initialized = controller.initialise_device(clock_mode=             ["internal PLL", "external", "external reference"][2],
+                                                    clock_frequency=        80.01,
                                                     # channels_to_activate=   [1,1,1,1],
                                                     channels_to_activate=   [0,0,1,0,1,0,0,0],
                                                     channel_amplitude=      5000,
-                                                    trigger_settings=       {"trigger_type":        [ "None", "Channel trigger", "Software trigger", "External analog trigger" ][0],
+                                                    trigger_settings=       {"trigger_type":        [ "None", "Channel trigger", "Software trigger", "External analog trigger" ][3],
                                                                                 "trigger_channel":  ["CH0", "CH1", "CH2", "CH3", "CH4", "CH5", "CH6", "CH7"][0],
                                                                                 "trigger_mode":     [ "Rising edge", "Falling edge", "Both"][0],
                                                                                 "trigger_level":    100}
@@ -250,25 +251,36 @@ def main():
     # for i, data_ in enumerate(data):
     #     plt.plot(controller.get_the_x_axis(), data_, label=f"Channel {i}")
     # plt.xlabel("Time [s]"); plt.ylabel("Signal [a.u.]")
-    # plt.show()
+    # plt.legend(); plt.show()
 
+    # file_to_save = "//sti-nas1.rcp.epfl.ch//dqml//dqml-commun//Data//PumpProbeData//2026//20260901/with_cables_not_twisted.pkl"
+    # import pickle as pkl
+    # with open(file_to_save, "wb") as file:
+    #     pkl.dump(data, file)
 
     # # Live mode
-    # import time
-    # import matplotlib.pyplot as plt
+    import time
+    import matplotlib.pyplot as plt
 
-    # plt.ion()
-    # fig, ax = plt.subplots()
+    plt.ion()
+    fig, ax = plt.subplots()
+    fps_counter = 0
+    fps_clock = time.time()
 
-    # while True:
-    #     y = controller.grab_trace()[1]
-    #     x = controller.get_the_x_axis()
-    #     ax.clear()
-    #     ax.plot(x, y)
-    #     plt.xlabel("Time [s]"); plt.ylabel("Signal [a.u.]")
-    #     fig.canvas.draw()
-    #     fig.canvas.flush_events()
-    #     time.sleep(0.1)
+    while True:
+
+        y = controller.grab_trace()[1]
+        y2 = controller.grab_trace()[0]
+
+        x = controller.get_the_x_axis()
+
+        ax.clear()
+        ax.plot(x, y)
+        # ax.plot(x, y2)
+        plt.xlabel("Time [s]"); plt.ylabel("Signal [a.u.]")
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        time.sleep(0.1)
 
 
 

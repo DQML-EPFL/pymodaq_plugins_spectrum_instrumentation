@@ -36,7 +36,6 @@ class Spectrum_Wrapper_FIFO:
             value = enter(manager)
             hit_except = False
             self.card = value
-            # self.card = spcm.Card(card_type=spcm.SPCM_TYPE_AI)
         except:
             print(" -- ERROR IN OPENING CARD : ")
  
@@ -157,15 +156,18 @@ class Spectrum_Wrapper_FIFO:
 
 
             buffer_samples = 20 * units.KiS
-            notify_samples = 1 * units.KiS
+            # Fewer, larger notify chunks per trace = fewer Python/driver round trips per grab_trace() call.
+            # Keep this <= buffer_samples. (Tried pairing this with memory_size()+loops() to auto-stop
+            # exactly at total_samples, but this card rejects that unless total_samples is an exact
+            # multiple of notify_samples - so we're back to manually stopping in grab_trace() instead.)
+            notify_samples = 4 * units.KiS
 
             self.data_transfer = spcm.DataTransfer(self.card)
             self.data_transfer.allocate_buffer(buffer_samples)
             self.data_transfer.pre_trigger(spcm.KIBI(1))
             self.data_transfer.notify_samples(notify_samples)
             self.data_transfer.start_buffer_transfer()
-            self.data_transfer.verbose(False)
-
+            self.data_transfer.verbose(False)  # was True - the "Fill size / Pos / Total" print is slow in a tight loop
 
             initialized = True
 
@@ -203,9 +205,11 @@ class Spectrum_Wrapper_FIFO:
 
 
     def grab_trace(self, post_trig_ms : float = 0):
-        # self.data_transfer.start_buffer_transfer()
         self.card.start(spcm.M2CMD_DATA_STARTDMA | spcm.M2CMD_CARD_ENABLETRIGGER)
 
+        # Accumulate blocks in a list and stop once we have enough samples,
+        # then concatenate once at the end (cheaper than np.append-ing on
+        # every block, which copies the whole growing array each time).
         blocks = []
         collected_samples = 0
         for data_block in self.data_transfer:
@@ -217,7 +221,6 @@ class Spectrum_Wrapper_FIFO:
 
         # stop the card and the DMA transfer now that we have enough data
         self.card.stop(spcm.M2CMD_DATA_STOPDMA)
-        
 
         all_data = []
         for i, channel in enumerate(self.channels):
@@ -226,32 +229,17 @@ class Spectrum_Wrapper_FIFO:
         return all_data
 
 
-        # data_array = np.array([])
-        # collected_samples = 0
-        # # Get a block of data
-        # for data_block in self.data_transfer:
-        #     if data_array.size == 0:
-        #         data_array = data_block
-        #     else:
-        #         data_array = np.append(data_array, data_block, axis=1)
-        #         # print(data_block.shape[1])
-        #     collected_samples = data_array.shape[1]
-        #     if collected_samples >= self.total_samples: 
-        #         # print("Collected ", collected_samples, " Samples, stopping")
-        #         break
+        # # Start DMA transfer and wait until the data is transferred
+        # self.data_transfer.start_buffer_transfer(spcm.M2CMD_DATA_STARTDMA, spcm.M2CMD_DATA_WAITDMA)
 
-        
-        # # stop the card and the DMA transfer now that we have enough data
-        # self.card.stop(spcm.M2CMD_DATA_STOPDMA)
+        # # Plot the acquired data
+        # time_data_s = self.data_transfer.time_data()
 
-        
         # all_data = []
-        # # print(data_array.shape)
-        # for i, channel in enumerate(self.channels):
-        #     all_data.append( np.array(channel.convert_data(data_array[i, :self.total_samples], units.V).magnitude ) )  # TODO : Way to do without trimming ? [i, :total_samples]
+        # for channel in self.channels:
+        #     all_data.append( np.array(channel.convert_data(self.data_transfer.buffer[channel, :], units.V).magnitude) )
 
         # return all_data
-
 
 
 
@@ -355,10 +343,9 @@ def main():
 
     # while True:
     #     try:
-    #         data = controller.grab_trace()
-    #         print( counter)
-    #         counter +=1
+    #         x, data = controller.grab_trace()
 
+    #         counter +=1
     #         if counter>=30:
     #             fps = counter / (time.time() - start)
     #             counter =0; start = time.time()

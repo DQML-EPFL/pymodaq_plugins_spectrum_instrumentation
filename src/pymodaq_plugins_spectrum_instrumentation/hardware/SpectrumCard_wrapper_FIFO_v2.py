@@ -192,6 +192,7 @@ class Spectrum_Wrapper_FIFO:
         print(  "============================================" )
 
 
+        self.card.start(spcm.M2CMD_DATA_STARTDMA | spcm.M2CMD_CARD_ENABLETRIGGER)
 
         return initialized
 
@@ -203,8 +204,6 @@ class Spectrum_Wrapper_FIFO:
 
 
     def grab_trace(self, post_trig_ms : float = 0):
-        # self.data_transfer.start_buffer_transfer()
-        self.card.start(spcm.M2CMD_DATA_STARTDMA | spcm.M2CMD_CARD_ENABLETRIGGER)
 
         blocks = []
         collected_samples = 0
@@ -216,7 +215,6 @@ class Spectrum_Wrapper_FIFO:
         data_array = np.concatenate(blocks, axis=1)
 
         # stop the card and the DMA transfer now that we have enough data
-        self.card.stop(spcm.M2CMD_DATA_STOPDMA)
         
 
         all_data = []
@@ -252,12 +250,14 @@ class Spectrum_Wrapper_FIFO:
 
         # return all_data
 
+        
 
 
 
     def terminate_the_communication(self, manager, hit_except):
         try:
             print('Communication terminated')
+            self.card.stop(spcm.M2CMD_DATA_STOPDMA)
             self.card.close()
 
         except:

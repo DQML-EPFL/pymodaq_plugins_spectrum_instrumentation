@@ -6,6 +6,10 @@ from pymodaq.utils.parameter import Parameter
 
 from pymodaq_plugins_spectrum_instrumentation.hardware.SpectrumCard_wrapper_Single import Spectrum_Wrapper_Single
 from pymodaq_plugins_spectrum_instrumentation.hardware.SpectrumCard_wrapper_Multi import Spectrum_Wrapper_Multi
+from pymodaq_plugins_spectrum_instrumentation.hardware.SpectrumCard_wrapper_FIFO import Spectrum_Wrapper_FIFO
+
+import time
+from scipy import signal
 
 #TODO : Make Post trig variable in multo
 #TODO : Make it possible to change params without rebooting card
@@ -24,7 +28,7 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
     params = comon_parameters + [
         {'title': 'Card Type', 'name':'card_type', 'type':'list', 'limits': [ "M2p.5936-x4", "M2p.5933-x4" ], "value":"M2p.5933-x4" },
 
-        {'title': 'Aquisition Mode', 'name':'DAQ_mode', 'type':'list', 'limits': [ "Single", "Multi", "FIFO WIP" ], "value":"Single" },
+        {'title': 'Aquisition Mode', 'name':'DAQ_mode', 'type':'list', 'limits': [ "Single", "Multi", "FIFO" ], "value":"FIFO" },
 
         {'title': 'Channels:', 'name': 'channels', 'type': 'group', 'children':[
             {'title': 'CH0', 'name': 'c0', 'type': 'led_push', 'value': False, 'default': False},
@@ -50,7 +54,7 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
             ]},
 
         {'title': 'Trigger parameters', 'name': 'trig_params', 'type': 'group', 'children':[
-            {'title': 'Trigger:', 'name': 'triggerType', 'type':'list', 'limits': [ "None", "Channel trigger", "Software trigger", "External analog trigger" ], "value":"None" },
+            {'title': 'Trigger:', 'name': 'triggerType', 'type':'list', 'limits': [ "None", "Channel trigger", "Software trigger", "External analog trigger" ], "value":"External analog trigger" },
             {'title': 'Trigger channel:', 'name': 'triggerChannel', 'type':'list', 'limits': ["CH0", "CH1", "CH2", "CH3", "CH4", "CH5", "CH6", "CH7"], "value":"CH0", "visible":False },
             {'title': 'Trigger mode', 'name': 'triggerMode', 'type':'list', 'limits': [ "Rising edge", "Falling edge", "Both"], "value":"Rising edge", "visible":True },
             {'title': 'Trigger level:', 'name': 'triggerLevel', 'type': 'slide', 'value': 100, 'default': 100, 'min': -500, 'max': 500, 'subtype': 'linear', 'suffix':'mV', "visible":True},
@@ -63,6 +67,7 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
             {'title': 'External ref. clock rate:', 'name': 'ExtClock', 'type': 'float', 'value': 80.01, 'default': 80.01, 'suffix':'MHz'},
             {'title': 'Clock threshold', 'name': 'clock_th', 'type': 'float', 'value': 1.5, 'default': 1.5, 'suffix':'V'},
             ], 'expanded': False},
+        {'title': 'High freq cutoff', 'name': 'cutoffFreq', 'type': 'slide', 'value': 0, 'suffix': 'kHz', 'visible':True, 'min':0, 'max':1000},
 
     ]
 
@@ -81,6 +86,9 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
             case "Multi":
                 self.wrapper = Spectrum_Wrapper_Multi
                 self.controller : Spectrum_Wrapper_Multi = None
+            case "FIFO":
+                self.wrapper = Spectrum_Wrapper_FIFO
+                self.controller : Spectrum_Wrapper_FIFO = None
             case _: print("Error, Wrapper Type Not Defined")
 
         # --- Update parameters based on the card type
@@ -96,6 +104,8 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
         self.trigger = None
         self.clock = None
 
+        # self.fps_counter = 0
+        # self.fps_clock=time.time()
 
 
     def commit_settings(self, param: Parameter):
@@ -191,14 +201,24 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
             self.emit_status(ThreadCommand('Update_Status', ['Error in card Aquisition ']))
             self.hit_except = True
 
+        # Apply Filter
+        for i in range( len(data_tot) ):
+            data_tot[i] = self.apply_lowpass_filter(data_tot[i])
 
-        dwa = DataFromPlugins(name='Pulse train', data=data_tot, dim='Data1D', labels=['D', 'I'], do_plot=True, do_save=True)
+        self.x_axis = Axis(data=self.controller.get_the_x_axis(), label='Time', units="s", index=0)
+
+        dwa = DataFromPlugins(name='Pulse train', data=data_tot, dim='Data1D', labels=['D', 'I'], do_plot=True, do_save=True, axes=[self.x_axis])
 
         data_to_export = [dwa]
 
         data = DataToExport('Spectrum', data=data_to_export)
         self.dte_signal.emit(data)
 
+        # self.fps_counter += 1
+        # if self.fps_counter > 30:
+        #     time_elapsed = time.time() - self.fps_clock; 
+        #     fps = self.fps_counter / time_elapsed; print("FPS : ", fps)
+        #     self.fps_clock = time.time(); self.fps_counter = 0
 
     def update_readonly_parameters(self):
         self.settings.child('timing', 'sampleRate').setValue(       self.settings.child("timing", "Sample_per_Pulse").value() / (1/ (self.settings.child("timing", "Num_Pulses", "PulseFreq").value() * 1e3) ) * 1e-6      )  # Points per Pulse / PulsePeriod, in MHz
@@ -237,6 +257,22 @@ class DAQ_1DViewer_Spectrum(DAQ_Viewer_base):
 
         for param in visibility['None'].keys():
             self.settings.child("trig_params", param).show(visibility[trigger_type][param])
+
+    def apply_lowpass_filter(self, trace):
+            cutoff = self.settings.child('cutoffFreq').value() * 1e3 # kHz to Hz
+            if cutoff is None or cutoff <= 0:
+                return trace
+
+            fs = self.settings.child('timing', 'sampleRate').value() * 1e6  # MHz -> Hz
+            nyquist = fs / 2
+
+            if cutoff >= nyquist:
+                # cutoff at/above Nyquist would have no effect (or error out) -- skip filtering
+                print("Nyquist")
+                return trace
+
+            b, a = signal.butter(N=4, Wn=cutoff / nyquist, btype='low')
+            return signal.filtfilt(b, a, trace)
 
 
 
